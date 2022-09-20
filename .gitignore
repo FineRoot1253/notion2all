@@ -1,0 +1,9 @@
+#directory
+#testdata
+internal/notion/testdata
+internal/deployment/testdata
+internal/common/testdata
+testdata
+
+#file
+*.json
