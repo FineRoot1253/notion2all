@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/fineroot1253/notion2all/cmd/config"
+	"github.com/fineroot1253/notion2all/internal/common"
 	"github.com/fineroot1253/notion2all/internal/common/logger"
 	"github.com/fineroot1253/notion2all/internal/notion/model"
 	"github.com/kjk/notionapi"
@@ -17,22 +19,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 )
 
 type Service interface {
-	/*	GetExportPageListToHtmlFiles 각각 페이지를 html로 export후 Html파일 다운로드
-		@Param string // export할 페이지ID
-		@Return string, error // 다운 받은 html 파일 path 리스트, error
-	*/
-	GetExportPageListToHtmlFiles(pageIdList []string) ([]model.NotionPostData, error)
-
 	/*
 		GetDeployPostList 최종 배포용 데이터 가져오기
 		@Param string // export할 페이지ID
 		@Return string, error // 다운 받은 html 파일 path 리스트, error
 	*/
-	GetDeployPostList(tablePagePath string) ([]model.ExportTask, error)
+	GetDeployPostList(tablePagePath string) ([]model.NotionPostData, error)
 
 	/*	enqueueExportTask Html파일 export 링크 생성 요청
 		@Param string // export할 페이지ID
@@ -50,7 +45,7 @@ type Service interface {
 		@Param []string // html 다운로드 url 리스트
 		@Return []string, error //  다운받은 파일 리스트, error
 	*/
-	downloadHtmlFiles(downloadLinkList []string) ([]string, error)
+	downloadHtmlFiles(taskList []model.ExportTask) error
 }
 
 type service struct {
@@ -60,61 +55,70 @@ type service struct {
 	logger       logger.LogTemplate
 }
 
-func NewService(ctx context.Context, token string, logger logger.LogTemplate) Service {
-	return service{context: ctx, tokenV2: token, logger: logger}
+func NewService(ctx context.Context, token string, logger logger.LogTemplate) (Service, error) {
+	if ctx == nil || token == "" || logger.IsEmpty() {
+		return nil, &common.CommonError{
+			Func: "NewService",
+			Data: common.Arguments_Error.String(),
+			Err:  errors.New("파라미터 개수가 모자릅니다"),
+		}
+	}
+	return service{context: ctx, tokenV2: token, logger: logger, notionClient: notionapi.Client{AuthToken: token}}, nil
 }
 
-func (s service) GetExportPageListToHtmlFiles(pageIdList []string) ([]string, error) {
+//func (s service) GetDeployPostList(pageIdList []string) ([]model.NotionPostData, error) {
 
-	// Input 레코드 , Output 레코드 초기화 로직
-	pageIdMap := map[string]model.NotionEnqueueTaskResponse{}
-	var taskIdList []string
-	var exportTask []model.ExportTask
+//s.notionClient.
 
-	convertedList := convertIdList(pageIdList)
+//return nil, nil
 
-	for idx, pageId := range convertedList {
-		result, err := s.enqueueExportTask(pageId)
-		if err != nil {
-			return nil, err
-		}
-		exportTask[idx].PageId = pageId
-		exportTask[idx].TaskId = result.TaskId
-		exportTask[idx].TaskResult = result
+//// Input 레코드 , Output 레코드 초기화 로직
+//pageIdMap := map[string]model.NotionEnqueueTaskResponse{}
+//var taskIdList []string
+//var exportTask []model.ExportTask
+//
+//convertedList := convertIdList(pageIdList)
+//
+//for idx, pageId := range convertedList {
+//	result, err := s.enqueueExportTask(pageId)
+//	if err != nil {
+//		return nil, err
+//	}
+//	exportTask[idx].PageId = pageId
+//	exportTask[idx].TaskId = result.TaskId
+//	exportTask[idx].TaskResult = result
+//
+//	pageIdMap[pageId] = result
+//
+//}
+//
+//// html 파일 생성요청 상태 확인시 실패한 요청에 대해서는 확인이 불가함!
+//// 		=> taskId가 없기 때문임
+//// 이를 위해 에러 없이 성공한 요청 TaskId만 모은 taskIdList를 만들고
+//// 이를 이용해 상태확인 및 동기 처리를 시도한다.
+//for _, response := range pageIdMap {
+//	if !response.HasErrors() {
+//		taskIdList = append(taskIdList, response.TaskId)
+//	}
+//}
+//
+//// 완성할때까지 0.5초 대기후 재확인하는 동기화 로직
+//// 보통은 한번에 통과하지만 정말 큰 페이지[루트블럭]은 좀 오래걸리긴한다.
+//for {
+//	status, err := s.getTaskStatusList(taskIdList)
+//	if err != nil {
+//		return nil, err
+//	}
+//	if status.HasIncompleteTask() {
+//		time.Sleep(time.Microsecond * 500)
+//	} else {
+//		break
+//	}
+//}
 
-		pageIdMap[pageId] = result
+//return []string{}, nil
 
-	}
-
-	// html 파일 생성요청 상태 확인시 실패한 요청에 대해서는 확인이 불가함!
-	// 		=> taskId가 없기 때문임
-	// 이를 위해 에러 없이 성공한 요청 TaskId만 모은 taskIdList를 만들고
-	// 이를 이용해 상태확인 및 동기 처리를 시도한다.
-	for _, response := range pageIdMap {
-		if !response.HasErrors() {
-			taskIdList = append(taskIdList, response.TaskId)
-		}
-	}
-
-	// 완성할때까지 0.5초 대기후 재확인하는 동기화 로직
-	// 보통은 한번에 통과하지만 정말 큰 페이지[루트블럭]은 좀 오래걸리긴한다.
-	for {
-		status, err := s.getTaskStatusList(taskIdList)
-		if err != nil {
-			return nil, err
-		}
-		if status.HasIncompleteTask() {
-			time.Sleep(time.Microsecond * 500)
-		} else {
-			break
-		}
-	}
-
-	// TODO 파일 다운로드
-
-	return []string{}, nil
-
-}
+//}
 
 func (s service) GetDeployPostList(tablePagePath string) ([]model.NotionPostData, error) {
 	//s.notionClient.
@@ -232,18 +236,32 @@ func sendGetRequest(ctx context.Context, url string) ([]byte, error) {
 	return all, nil
 }
 
-func (serv service) downloadHtmlFiles(downloadLinkList []model.ExportTask) ([]string, error) {
+func (serv service) downloadHtmlFiles(taskList []model.ExportTask) error {
 
-	var downloadFilePathList []string
-	tempDir, err := os.MkdirTemp(".", "notion_htmls")
-	if err != nil {
-		return nil, err
+	if err := os.MkdirAll(".", 0755); err != nil {
+		return err
 	}
 
-	for _, data := range downloadLinkList {
-		downloadPath, _ := sendGetRequest(serv.context, link)
-		os.CreateTemp(tempDir)
+	for _, data := range taskList {
+		byteData, _ := sendGetRequest(serv.context, data.GetExportUrl())
+		file, err := os.Create(data.PageId)
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			file.Close()
+		}()
+
+		_, err = file.Write(byteData)
+		if err != nil {
+			return err
+		}
+
 	}
+
+	return nil
+
 }
 
 /*	convertIdList pageid 리스트를 uuid-v4 형식으로 변환
@@ -274,6 +292,7 @@ func unzip(src string, destDirPath string) error {
 	if err := os.MkdirAll(destDirPath, 0755); err != nil {
 		return err
 	}
+
 	for _, f := range r.File {
 		err := extractAndWriteFile(f, destDirPath)
 		if err != nil {
@@ -306,7 +325,7 @@ func extractAndWriteFile(f *zip.File, destDirPath string) error {
 		}
 
 	} else {
-		if err := os.MkdirAll(filepath.Dir(path), f.Mode()); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			return err
 		}
 		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
