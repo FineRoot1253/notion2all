@@ -15,6 +15,13 @@ func NewLogTemplate(runner LogRunner) LogTemplate {
 	return LogTemplate{runner: runner}
 }
 
+func (lt LogTemplate) IsEmpty() bool {
+	if lt.runner == nil {
+		return true
+	}
+	return false
+}
+
 func (l LogTemplate) Execute(msg string, run Run[any]) TY {
 	// 예외처리
 	defer func() {
