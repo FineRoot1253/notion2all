@@ -35,8 +35,12 @@ type ExportOption struct {
 }
 
 type ExportTask struct {
-	PageId     string
-	TaskId     string
-	TaskResult NotionEnqueueTaskResponse
-	FilePath   []byte
+	PageId               string
+	TaskId               string
+	TaskResult           NotionEnqueueTaskResponse
+	TaskStatusResultItem NotionGetTaskResultItem
+}
+
+func (et ExportTask) GetExportUrl() string {
+	return et.TaskStatusResultItem.Status.ExportURL
 }
