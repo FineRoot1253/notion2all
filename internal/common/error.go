@@ -35,9 +35,10 @@ const (
 	CanNotFoundFile_Error
 	Marshal_Error
 	NotionAPIRequest_Error
+	TistoryAPIRequest_Error
 	Arguments_Error
 )
 
 func (err ErrorStateType) String() string {
-	return []string{"Unexpected_Error", "CanNotFoundFile_Error", "Marshal_Error", "NotionAPIRequest_Error", "Arguments_Error"}[err]
+	return []string{"Unexpected_Error", "CanNotFoundFile_Error", "Marshal_Error", "NotionAPIRequest_Error", "TistoryAPIRequest_Error", "Arguments_Error"}[err]
 }
