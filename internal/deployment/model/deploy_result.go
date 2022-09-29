@@ -9,5 +9,9 @@ type DeployResult struct {
 	SuccessTaskCount int
 	FailureTaskCount int
 	TaskList         []notionModel.ExportTask
-	DeployList       []tistoryModel.PostWriteResult
+	DeployList       []DeployResponseContent
+}
+
+type DeployResponseContent interface {
+	tistoryModel.PostWriteResult | any
 }
