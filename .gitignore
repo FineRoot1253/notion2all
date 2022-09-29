@@ -4,6 +4,8 @@ internal/notion/testdata
 internal/deployment/testdata
 internal/common/testdata
 testdata
+#build [result binary files]
+build/
 
 #file
 *.json
