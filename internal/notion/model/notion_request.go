@@ -39,6 +39,7 @@ type ExportTask struct {
 	TaskId               string
 	TaskResult           NotionEnqueueTaskResponse
 	TaskStatusResultItem NotionGetTaskResultItem
+	FilePath             string
 }
 
 func (et ExportTask) GetExportUrl() string {

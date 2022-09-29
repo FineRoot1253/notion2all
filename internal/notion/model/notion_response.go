@@ -10,6 +10,13 @@ type NotionEnqueueTaskResponse struct {
 	} `json:"clientData"`
 }
 
+func (res NotionEnqueueTaskResponse) HasErrors() bool {
+	if res.TaskId != "" {
+		return false
+	}
+	return true
+}
+
 type NotionGetTasksResponse struct {
 	Results []NotionGetTaskResultItem `json:"results"`
 }
@@ -47,11 +54,16 @@ type NotionGetTaskResultItem struct {
 	Error string `json:"error"`
 }
 
-func (res NotionEnqueueTaskResponse) HasErrors() bool {
-	if res.TaskId != "" {
-		return false
+func (res NotionGetTasksResponse) GetExportDataList(taskIdList []ExportTask) []ExportTask {
+	list := taskIdList
+	for _, s := range list {
+		for _, result := range res.Results {
+			if s.TaskId == result.Id {
+				s.TaskStatusResultItem = result
+			}
+		}
 	}
-	return true
+	return list
 }
 
 func (res NotionGetTasksResponse) HasErrors() bool {
