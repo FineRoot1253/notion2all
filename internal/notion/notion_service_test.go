@@ -3,6 +3,9 @@ package notion
 import (
 	"context"
 	"github.com/fineroot1253/notion2all/internal/common/logger"
+	"github.com/fineroot1253/notion2all/internal/common/utils"
+	notionModel "github.com/fineroot1253/notion2all/internal/notion/model"
+	tistoryModel "github.com/fineroot1253/notion2all/internal/tistory/model"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"log"
@@ -11,7 +14,29 @@ import (
 	"testing"
 )
 
-var commonService Service
+var (
+	commonService Service
+	notionConfig  notionModel.NotionConfiguration
+	tistoryConfig tistoryModel.TistoryConfiguration
+)
+
+func init() {
+	var cfgFile string
+	ctx := context.Background()
+
+	cfgFile = "./testdata/config.json"
+
+	if err := utils.ParseConfigFile(cfgFile, &notionConfig, &tistoryConfig); err != nil {
+		log.Panicln(err)
+	}
+
+	newService, err := NewService(ctx, notionConfig, logger.NewLogTemplate(logger.CommonLogRunner{}))
+	if err != nil {
+		log.Panicln(err)
+	}
+	commonService = newService
+
+}
 
 func TestNewService(t *testing.T) {
 	type args struct {
@@ -46,7 +71,7 @@ func TestNewService(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			serv, err := NewService(tt.args.ctx, tt.args.token, tt.args.logger)
+			_, err := NewService(tt.args.ctx, notionConfig, tt.args.logger)
 			if err != nil {
 				if tt.wantErr {
 					log.Println(err)
@@ -55,7 +80,6 @@ func TestNewService(t *testing.T) {
 				}
 			} else {
 				log.Println("NewService complete")
-				commonService = serv
 			}
 		})
 	}
@@ -136,6 +160,39 @@ func Test_unzip(t *testing.T) {
 				}
 			}
 
+		})
+	}
+}
+
+func Test_service_GetDeployPostList(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		want    []notionModel.NotionPostData
+		wantErr bool
+	}{
+		{
+			name:    "배포준비 게시글 리스트 가져오기 테스트:[success]",
+			wantErr: false,
+		},
+		{
+			name:    "배포준비 게시글 리스트 가져오기 테스트:[failure]",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			list, err := commonService.GetDeployPostList()
+			if err != nil {
+				if tt.wantErr {
+					log.Println(err)
+				} else {
+					log.Panicln(err)
+				}
+			}
+
+			assert.NotEmpty(t, list)
 		})
 	}
 }
