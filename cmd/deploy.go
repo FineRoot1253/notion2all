@@ -22,18 +22,20 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"encoding/json"
-	"github.com/fineroot1253/notion2all/internal/common"
+	"context"
 	"github.com/fineroot1253/notion2all/internal/common/logger"
+	"github.com/fineroot1253/notion2all/internal/common/utils"
 	"github.com/fineroot1253/notion2all/internal/deployment"
+	"github.com/fineroot1253/notion2all/internal/notion"
 	notionModel "github.com/fineroot1253/notion2all/internal/notion/model"
+	"github.com/fineroot1253/notion2all/internal/tistory"
 	tistoryModel "github.com/fineroot1253/notion2all/internal/tistory/model"
-	"io/ioutil"
-	"log"
-	"os"
-
+	"github.com/fineroot1253/tistoryAPI"
 	"github.com/spf13/cobra"
+	"log"
 )
+
+var deployService deployment.Service
 
 // deployCmd represents the deployment command
 // 동작 순서
@@ -51,15 +53,16 @@ import (
 //		5-4. 5-2 구조체 리스트를 토대로 tistoryAPI를 통해 배포 시작
 //
 var deployCmd = &cobra.Command{
-	Use:   "deployment",
+	Use:   "deploy",
 	Short: "Start distributing notion content to other platforms.",
 	Long: `Start to deployment notion contents to other platform.
 Depending on the config.json content, you can specify the platform on which it is deployed.
 `,
-	//Run: func(cmd *cobra.Command, args []string) {
-	//	fmt.Println("deployment called")
-	//
-	//},
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := deployService.Deploy(); err != nil {
+			log.Panicln(err)
+		}
+	},
 }
 
 /*
@@ -72,38 +75,31 @@ func init() {
 	var cfgFile string
 	var notionConfig notionModel.NotionConfiguration
 	var tistoryConfig tistoryModel.TistoryConfiguration
+	ctx := context.Background()
 	rootCmd.AddCommand(deployCmd)
 
 	rootCmd.Flags().StringVar(&cfgFile, "config", "./config.json", "config file (default is ./config.json)")
 	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	if err := parseConfigFile(cfgFile, notionConfig, tistoryConfig); err != nil {
+	if err := utils.ParseConfigFile(cfgFile, &notionConfig, &tistoryConfig); err != nil {
 		log.Panicln(err)
 	}
 
-	logger.NewLogger(common.)
-
-	service := deployment.NewService()
-}
-
-func parseConfigFile(cfgFile string, notionConfig notionModel.NotionConfiguration, tistoryConfig tistoryModel.TistoryConfiguration) error {
-	openFile, err := os.Open(cfgFile)
+	// 1) 로그 템플릿 생성
+	logTemplate := logger.NewLogTemplate(logger.CommonLogRunner{})
+	// 2) notion service 생성
+	notionService, err := notion.NewService(ctx, notionConfig, logTemplate)
 	if err != nil {
-		return &common.CommonError{Func: "parseConfigFile", Data: common.CanNotFoundFile_Error.String(), Err: err}
+		log.Panicln(err)
 	}
-
-	defer openFile.Close()
-	byteData, err := ioutil.ReadAll(openFile)
+	// 3) tistory service 생성
+	tistoryAPIService, err := tistoryAPI.NewService(ctx, tistoryConfig.GetUserData())
 	if err != nil {
-		return &common.CommonError{Func: "parseConfigFile", Data: common.Marshal_Error.String(), Err: err}
+		log.Panicln(err)
 	}
 
-	if err := json.Unmarshal(byteData, &notionConfig); err != nil {
-		return &common.CommonError{Func: "parseConfigFile", Data: common.Marshal_Error.String(), Err: err}
-	}
+	tistoryService := tistory.NewService(tistoryConfig, tistoryAPIService)
 
-	if err := json.Unmarshal(byteData, &tistoryConfig); err != nil {
-		return &common.CommonError{Func: "parseConfigFile", Data: common.Marshal_Error.String(), Err: err}
-	}
-	return nil
+	deployService = deployment.NewService(logTemplate, notionService, tistoryService)
+
 }
